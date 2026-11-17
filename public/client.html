@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Food Delivery: Realtime</title>
+    <style>
+      :root {
+        --bg: #f4f5f7;
+        --card: #ffffff;
+        --text: #1d2129;
+        --muted: #6b7280;
+        --border: #e3e5e8;
+        --accent: #e8633a;
+        --accent-dark: #c94f29;
+        --ok: #1f9d55;
+        --err: #d64545;
+        --info: #2f6fd6;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          14px/1.45 'Segoe UI',
+          system-ui,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 14px 20px;
+        background: var(--card);
+        border-bottom: 1px solid var(--border);
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0 auto 0 0;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        background: #fde8e8;
+        color: var(--err);
+      }
+      .badge.on {
+        background: #e3f6ea;
+        color: var(--ok);
+      }
+      .badge::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      main {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+        padding: 16px 20px;
+      }
+      section {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        min-width: 0;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 0 0 10px;
+      }
+      h2 small {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font: inherit;
+      }
+      input.short {
+        flex: 0 1 110px;
+      }
+      button {
+        padding: 7px 12px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--accent-dark);
+      }
+      button.secondary {
+        background: #e9ebef;
+        color: var(--text);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 260px;
+        overflow-y: auto;
+        border-top: 1px solid var(--border);
+      }
+      li {
+        padding: 6px 2px;
+        border-bottom: 1px solid var(--border);
+        font:
+          12.5px/1.4 Consolas,
+          monospace;
+        word-break: break-word;
+      }
+      li time {
+        color: var(--muted);
+        margin-right: 6px;
+      }
+      li b {
+        color: var(--info);
+      }
+      li.err b {
+        color: var(--err);
+      }
+      li.ok b {
+        color: var(--ok);
+      }
+      li.room b {
+        color: var(--accent);
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .rooms {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .chip {
+        background: #fff1ea;
+        color: var(--accent-dark);
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .stat {
+        background: var(--bg);
+        border-radius: 8px;
+        padding: 8px;
+        text-align: center;
+      }
+      .stat strong {
+        display: block;
+        font-size: 18px;
+      }
+      .stat span {
+        font-size: 11px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Доставка їжі · Realtime</h1>
+      <input id="serverUrl" class="short" style="flex-basis: 200px" />
+      <button id="connectBtn">Підключитися</button>
+      <button id="disconnectBtn" class="secondary" disabled>
+        Відключитися
+      </button>
+      <span id="status" class="badge">offline</span>
+      <span id="socketId" class="muted"></span>
+    </header>
+
+    <main>
+      <section>
+        <h2>
+          Глобальні сповіщення
+          <small>broadcastNotification → globalAlert</small>
+        </h2>
+        <div class="row">
+          <input
+            id="messageInput"
+            placeholder="Текст повідомлення для всіх клієнтів"
+            maxlength="500"
+          />
+          <button id="sendBtn">Надіслати</button>
+          <button id="pingBtn" class="secondary">Ping</button>
+        </div>
+        <ul id="events"></ul>
+      </section>
+
+      <section>
+        <h2>Кімнати доставки <small>joinRoom / leaveRoom</small></h2>
+        <div class="row">
+          <input id="roomInput" value="delivery_101" />
+          <button id="joinBtn">Приєднатися</button>
+          <button id="leaveBtn" class="secondary">Вийти</button>
+        </div>
+        <div class="rooms" id="rooms">
+          <span class="muted">Немає активних підписок</span>
+        </div>
+        <ul id="roomEvents"></ul>
+      </section>
+
+      <section>
+        <h2>Симулятор кур'єра <small>updateCourierLocation</small></h2>
+        <div class="row">
+          <input
+            id="orderInput"
+            class="short"
+            value="101"
+            placeholder="orderId"
+          />
+          <input
+            id="latInput"
+            class="short"
+            value="50.4501"
+            placeholder="lat"
+          />
+          <input
+            id="lngInput"
+            class="short"
+            value="30.5234"
+            placeholder="lng"
+          />
+          <input id="etaInput" class="short" value="12" placeholder="ETA, хв" />
+        </div>
+        <div class="row">
+          <button id="courierBtn">Оновити локацію</button>
+          <span class="muted"
+            >Подія courierLocationUpdated отримають лише підписники кімнати
+            delivery_&lt;orderId&gt;</span
+          >
+        </div>
+      </section>
+
+      <section>
+        <h2>
+          Server-Sent Events <small>GET /notifications/events/stream</small>
+        </h2>
+        <div class="row">
+          <button id="sseBtn">Підписатися на потік</button>
+          <button id="sseStopBtn" class="secondary" disabled>Зупинити</button>
+          <span id="sseStatus" class="muted">неактивно</span>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <strong id="statConnections">–</strong><span>WS-підключень</span>
+          </div>
+          <div class="stat">
+            <strong id="statRooms">–</strong><span>кімнат доставки</span>
+          </div>
+          <div class="stat">
+            <strong id="statUptime">–</strong><span>uptime, с</span>
+          </div>
+        </div>
+        <ul id="sseEvents"></ul>
+      </section>
+    </main>
+
+    <script>
+      const defaultUrl = location.protocol.startsWith('http')
+        ? location.origin
+        : 'http://localhost:4000';
+      const $ = (id) => document.getElementById(id);
+      $('serverUrl').value = defaultUrl;
+
+      let socket = null;
+      let eventSource = null;
+      const joinedRooms = new Set();
+
+      function addItem(listId, label, payload, cls = '') {
+        const li = document.createElement('li');
+        li.className = cls;
+        const time = document.createElement('time');
+        time.textContent = new Date().toLocaleTimeString('uk-UA');
+        const b = document.createElement('b');
+        b.textContent = label + ' ';
+        li.append(
+          time,
+          b,
+          document.createTextNode(
+            typeof payload === 'string' ? payload : JSON.stringify(payload),
+          ),
+        );
+        $(listId).prepend(li);
+      }
+
+      function renderRooms() {
+        const box = $('rooms');
+        box.replaceChildren();
+        if (joinedRooms.size === 0) {
+          const span = document.createElement('span');
+          span.className = 'muted';
+          span.textContent = 'Немає активних підписок';
+          box.append(span);
+          return;
+        }
+        for (const room of joinedRooms) {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.textContent = room;
+          box.append(chip);
+        }
+      }
+
+      function setConnected(on) {
+        $('status').textContent = on ? 'online' : 'offline';
+        $('status').classList.toggle('on', on);
+        $('socketId').textContent = on ? 'socket.id: ' + socket.id : '';
+        $('connectBtn').disabled = on;
+        $('disconnectBtn').disabled = !on;
+      }
+
+      function loadSocketIo(base) {
+        return new Promise((resolve, reject) => {
+          if (window.io) return resolve();
+          const script = document.createElement('script');
+          script.src = base + '/socket.io/socket.io.js';
+          script.onload = resolve;
+          script.onerror = () =>
+            reject(new Error('Не вдалося завантажити socket.io-client'));
+          document.head.append(script);
+        });
+      }
+
+      function requireSocket() {
+        if (!socket || !socket.connected) {
+          addItem('events', 'error', 'Спочатку підключіться до сервера', 'err');
+          return false;
+        }
+        return true;
+      }
+
+      $('connectBtn').onclick = async () => {
+        const base = $('serverUrl').value.replace(/\/$/, '');
+        try {
+          await loadSocketIo(base);
+        } catch (e) {
+          addItem('events', 'error', e.message, 'err');
+          return;
+        }
+        socket = io(base, { transports: ['websocket'] });
+        socket.on('connect', () => {
+          setConnected(true);
+          addItem('events', 'connect', 'Підключено як ' + socket.id, 'ok');
+          for (const room of joinedRooms)
+            socket.emit('joinRoom', { roomId: room });
+        });
+        socket.on('disconnect', (reason) => {
+          setConnected(false);
+          addItem('events', 'disconnect', reason, 'err');
+        });
+        socket.on('pong', (data) => addItem('events', 'pong', data));
+        socket.on('globalAlert', (data) =>
+          addItem(
+            'events',
+            'globalAlert',
+            `${data.sender}: ${data.message}`,
+            'ok',
+          ),
+        );
+        socket.on('joined', (data) => {
+          joinedRooms.add(data.roomId);
+          renderRooms();
+          addItem('roomEvents', 'joined', data.roomId, 'ok');
+        });
+        socket.on('left', (data) => {
+          joinedRooms.delete(data.roomId);
+          renderRooms();
+          addItem('roomEvents', 'left', data.roomId);
+        });
+        socket.on('courierLocationUpdated', (data) => {
+          const eta =
+            data.etaMinutes != null ? `, ETA ${data.etaMinutes} хв` : '';
+          addItem(
+            'roomEvents',
+            'courierLocationUpdated',
+            `замовлення #${data.orderId}: ${data.lat}, ${data.lng}${eta}`,
+            'room',
+          );
+        });
+        socket.on('exception', (err) =>
+          addItem('events', 'exception', err.message ?? err, 'err'),
+        );
+      };
+
+      $('disconnectBtn').onclick = () => socket && socket.disconnect();
+
+      $('pingBtn').onclick = () => {
+        if (requireSocket()) socket.emit('ping');
+      };
+
+      $('sendBtn').onclick = () => {
+        const text = $('messageInput').value.trim();
+        if (!text || !requireSocket()) return;
+        socket.emit('broadcastNotification', text);
+        $('messageInput').value = '';
+      };
+      $('messageInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') $('sendBtn').click();
+      });
+
+      $('joinBtn').onclick = () => {
+        if (requireSocket())
+          socket.emit('joinRoom', { roomId: $('roomInput').value.trim() });
+      };
+      $('leaveBtn').onclick = () => {
+        if (requireSocket())
+          socket.emit('leaveRoom', { roomId: $('roomInput').value.trim() });
+      };
+
+      $('courierBtn').onclick = () => {
+        if (!requireSocket()) return;
+        const payload = {
+          orderId: $('orderInput').value.trim(),
+          lat: Number($('latInput').value),
+          lng: Number($('lngInput').value),
+          etaMinutes:
+            $('etaInput').value === ''
+              ? undefined
+              : Number($('etaInput').value),
+        };
+        socket.emit('updateCourierLocation', payload, (ack) =>
+          addItem('events', 'ack', ack),
+        );
+      };
+
+      $('sseBtn').onclick = () => {
+        const base = $('serverUrl').value.replace(/\/$/, '');
+        eventSource = new EventSource(base + '/notifications/events/stream');
+        $('sseStatus').textContent = 'підключення...';
+        $('sseBtn').disabled = true;
+        $('sseStopBtn').disabled = false;
+        eventSource.onopen = () =>
+          ($('sseStatus').textContent = 'активно, оновлення кожні 5 с');
+        eventSource.addEventListener('serverStatus', (event) => {
+          const data = JSON.parse(event.data);
+          $('statConnections').textContent = data.activeConnections;
+          $('statRooms').textContent = data.activeDeliveryRooms;
+          $('statUptime').textContent = data.uptimeSeconds;
+          addItem('sseEvents', 'serverStatus #' + event.lastEventId, data);
+        });
+        eventSource.onerror = () =>
+          ($('sseStatus').textContent =
+            'помилка з’єднання, повторна спроба...');
+      };
+
+      $('sseStopBtn').onclick = () => {
+        eventSource && eventSource.close();
+        $('sseStatus').textContent = 'зупинено';
+        $('sseBtn').disabled = false;
+        $('sseStopBtn').disabled = true;
+      };
+    </script>
+  </body>
+</html>

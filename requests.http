@@ -1,0 +1,149 @@
+@baseUrl = http://localhost:4000
+@dishId = 00000000-0000-4000-8000-000000000000
+@userId = 00000000-0000-4000-8000-000000000000
+
+### 1. Реєстрація клієнта (роль CLIENT за замовчуванням)
+POST {{baseUrl}}/auth/register HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "client@example.com",
+  "password": "strongPassword123"
+}
+
+### Реєстрація з тим самим email (409)
+POST {{baseUrl}}/auth/register HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "client@example.com",
+  "password": "otherPass1"
+}
+
+### Невалідні дані (400)
+POST {{baseUrl}}/auth/register HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "password": "12345"
+}
+
+### 2. Логін клієнта
+# @name clientLogin
+POST {{baseUrl}}/auth/login HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "client@example.com",
+  "password": "strongPassword123"
+}
+
+### Невірний пароль (401)
+POST {{baseUrl}}/auth/login HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "client@example.com",
+  "password": "wrongPassword1"
+}
+
+### 3. Профіль поточного користувача
+GET {{baseUrl}}/auth/me HTTP/1.1
+Authorization: Bearer {{clientLogin.response.body.accessToken}}
+
+### Профіль без токена (401)
+GET {{baseUrl}}/auth/me HTTP/1.1
+
+### 4. Публічний перегляд меню (без токена)
+GET {{baseUrl}}/dishes HTTP/1.1
+
+### Публічний довідник алергенів
+GET {{baseUrl}}/allergens HTTP/1.1
+
+### 5. CLIENT намагається створити страву (403)
+POST {{baseUrl}}/dishes HTTP/1.1
+Authorization: Bearer {{clientLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Нова страва",
+  "price": 250,
+  "weightGrams": 300,
+  "calories": 400,
+  "isSpicy": false
+}
+
+### CLIENT намагається видалити страву (403)
+DELETE {{baseUrl}}/dishes/{{dishId}} HTTP/1.1
+Authorization: Bearer {{clientLogin.response.body.accessToken}}
+
+### 6. Логін адміністратора (створюється з ADMIN_EMAIL / ADMIN_PASSWORD)
+# @name adminLogin
+POST {{baseUrl}}/auth/login HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "admin@food.local",
+  "password": "Admin12345"
+}
+
+### Список користувачів (лише ADMIN)
+GET {{baseUrl}}/users HTTP/1.1
+Authorization: Bearer {{adminLogin.response.body.accessToken}}
+
+### 7. ADMIN призначає користувачу роль CHEF
+PATCH {{baseUrl}}/users/{{userId}}/role HTTP/1.1
+Authorization: Bearer {{adminLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "role": "CHEF"
+}
+
+### 8. Логін шефа
+# @name chefLogin
+POST {{baseUrl}}/auth/login HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "chef@food.local",
+  "password": "ChefPass1"
+}
+
+### CHEF створює страву (201)
+POST {{baseUrl}}/dishes HTTP/1.1
+Authorization: Bearer {{chefLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Вареники з вишнею",
+  "price": 175,
+  "weightGrams": 300,
+  "calories": 520,
+  "isSpicy": false,
+  "allergens": ["Глютен"]
+}
+
+### CHEF змінює страву
+PATCH {{baseUrl}}/dishes/{{dishId}} HTTP/1.1
+Authorization: Bearer {{chefLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "price": 185
+}
+
+### 9. Замовлення від імені поточного користувача
+POST {{baseUrl}}/orders HTTP/1.1
+Authorization: Bearer {{clientLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{dishId}}",
+  "quantity": 2
+}
+
+### 10. Потік Server-Sent Events (оновлення кожні 5 секунд)
+GET {{baseUrl}}/notifications/events/stream HTTP/1.1
+Accept: text/event-stream
